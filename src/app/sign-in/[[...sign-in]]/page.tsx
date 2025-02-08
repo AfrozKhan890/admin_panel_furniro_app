@@ -1,4 +1,3 @@
-// import Login from '@/components/auth/Login'
 import {SignIn} from "@clerk/nextjs"
 import React from 'react'
 

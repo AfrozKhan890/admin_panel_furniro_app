@@ -1,41 +1,36 @@
-import { authMiddleware } from "@clerk/nextjs";
-import { NextResponse } from "next/server";
+import { clerkMiddleware } from '@clerk/nextjs/server';
+import { NextResponse } from 'next/server';
 
-export default authMiddleware((auth, req) => {
+export default clerkMiddleware(async (auth, req) => {
   const url = new URL(req.url);
 
-  // ✅ Publicly accessible routes
-  const publicPaths = ["/sign-in", "/unauthorized"];
-  if (publicPaths.includes(url.pathname)) {
+  // Allow public routes (including sign-in and API routes)
+  const publicPaths = ['/sign-in', '/unauthorized', '/api', '/_next'];
+  if (publicPaths.some((path) => url.pathname.startsWith(path))) {
     return NextResponse.next();
   }
 
-  // ✅ Extract authentication info
-  const { userId, sessionClaims } = auth();
-
-  // 🚨 If user is NOT authenticated, redirect to sign-in
-  if (!userId) {
-    return NextResponse.redirect(new URL("/sign-in", req.url));
+  // Check authentication
+  const session = await auth();
+  
+  // If user is NOT logged in, allow access to sign-in but restrict other pages
+  if (!session) {
+    return NextResponse.redirect(new URL('/sign-in', req.url));
   }
 
-  // ✅ Extract user role from Clerk metadata
-  const role = sessionClaims?.publicMetadata?.role;
+  // Extract user role from session claims
+  const role = session?.sessionClaims?.metadata?.role;
 
-  // 🚨 If no role is found, assume unauthorized
+  // If user is logged in but has NO role, treat as unauthorized
   if (!role) {
-    return NextResponse.redirect(new URL("/sign-in", req.url));
+    return NextResponse.redirect(new URL('/unauthorized', req.url));
   }
 
-  // 🚨 If user is NOT an admin or superadmin, redirect to unauthorized
+  // If user is NOT admin or superadmin, redirect to unauthorized
   if (role !== "admin" && role !== "superadmin") {
-    return NextResponse.redirect(new URL("/unauthorized", req.url));
+    return NextResponse.redirect(new URL('/unauthorized', req.url));
   }
 
-  // ✅ User is authenticated and authorized, allow access
+  // If user is an admin or superadmin, allow access
   return NextResponse.next();
 });
-
-// ✅ Apply middleware to specific routes
-export const config = {
-  matcher: ["/dashboard/:path*", "/admin/:path*"],
-};
